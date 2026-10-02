@@ -1,0 +1,15 @@
+app = "my-gemlog"
+primary_region = "nrt" # 建議選擇鄰近區域（如東京 nrt 或新加坡 sin）
+
+[build]
+  dockerfile = "Dockerfile"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 1965
+  auto_stop_machines = true   # 無連線自動休眠（Scale-to-Zero）
+  auto_start_machines = true  # 有請求時數百毫秒內冷啟動
+  min_machines_running = 0    # 無人訪問時 0 CPU / 0 記憶體消耗
+
+  [[services.ports]]
+    port = 1965
