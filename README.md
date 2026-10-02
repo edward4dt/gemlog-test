@@ -110,7 +110,10 @@ sudo systemctl enable --now agate
 
 ## CI/CD 部署設定
 
-專案透過 `.github/workflows/deploy.yml` 進行部署。
+專案透過 `.github/workflows/deploy.yml` 進行部署：
+
+* **自動觸發**：推送到 `main` 分支時，以 rsync（`easingthemes/ssh-deploy@v5`）將全站內容同步至主機 `/var/gemini/content`（含 `--delete`，保持與儲存庫一致）。
+* **手動觸發**：Workflow 同時啟用了 `workflow_dispatch`，可在 **Actions → Deploy Gemlog → Run workflow** 手動執行全量同步（災難復原換新主機後使用）。
 
 ### 1. 建立專用 SSH Key（於主機執行）
 

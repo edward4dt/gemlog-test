@@ -1,0 +1,24 @@
+name: Deploy Gemlog
+
+on:
+  push:
+    branches: [ main ]
+  # 災難復原用：更換新主機後可在 Actions 頁面手動點擊 "Run workflow" 全量同步
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sync files to Server
+        uses: easingthemes/ssh-deploy@v5
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzP --delete --exclude='.git*'"
+          SOURCE: "/"
+          REMOTE_HOST: ${{ secrets.SERVER_IP }}
+          REMOTE_USER: ${{ secrets.SERVER_USER }}
+          TARGET: "/var/gemini/content"
