@@ -2,12 +2,12 @@
 
 日期：2026-10-02
 
-這是一篇用於測試 Gemlog 部署流程的文章。只要這個檔案能透過 gemini:// 讀取，代表：
+這是一篇用於測試 Serverless Gemlog 部署流程的文章。只要這個檔案能透過 gemini:// 讀取，代表：
 
-* GitHub → git push 正常
-* GitHub Actions → rsync 同步到主機正常
-* Agate 伺服器 → TLS 憑證與 1965 連接埠正常
+* 本機 → git push 到 GitHub 正常
+* GitHub Actions → flyctl deploy 建置 Docker 映像檔正常
+* Fly.io → Scale-to-Zero 冷啟動與 Port 1965 TLS 連線正常
 
-> 內容與主機解耦：主機只是拋棄式呈現端，文章永遠存放在 Git 儲存庫中。
+> 零作業系統維護：不需要租用 VPS、無須管理防火牆與安全補丁，整個站點就是這個 Git 儲存庫。
 
 => /index.gmi 回首頁

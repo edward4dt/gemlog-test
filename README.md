@@ -1,15 +1,15 @@
-# My Gemlog
+# Serverless Gemlog
 
-> 基於 Gemini 協定打造的個人極簡膠囊（Capsule）。內容與主機完全解耦，以 GitHub 作為單一事實來源（Single Source of Truth），具備秒級災難復原能力的純文字個人站點。
+> 基於 Gemini 協定打造的極簡個人膠囊（Capsule）。採用 **Fly.io Scale-to-Zero（無伺服器容器）** 架構，徹底擺脫傳統 VPS 維護負擔，結合 GitHub Actions 實現「推送即發布」的無伺服器工作流。
 
 ---
 
-## 專案特性
+## 為什麼選擇此架構？
 
-- **極簡純文字**：全站採用 Gemtext（`.gmi`），不依賴任何前端框架、CSS、JavaScript 或資料庫。
-- **資料高度便攜**：文章全部存放在此儲存庫，伺服器只作為「拋棄式呈現端」，隨時可更換。
-- **自動化發布**：提交 Commit 並推送到 `main` 分支時，觸發 GitHub Actions 自動同步到伺服器。
-- **原生安全**：Gemini 協定強制使用 TLS 加密傳輸，杜絕明文竊聽與追蹤。
+- **零作業系統維護**：不需要租用 Linux VPS、無須管理防火牆、不用定期更新系統套件與安全補丁。
+- **無連線自動休眠（Scale-to-Zero）**：無人訪問時容器自動掛起（0 CPU / 0 記憶體消耗），有請求時於數百毫秒內冷啟動。
+- **原生支援 Port 1965**：突破多數 Serverless 平台僅支援 HTTP/HTTPS 的限制，完整支援 Gemini 專屬 TCP 通訊協定。
+- **單一事實來源（SSOT）**：所有文章與設定均由 Git 版本控制，本儲存庫即為完整站點。
 
 ---
 
@@ -19,142 +19,191 @@
 .
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml          # GitHub Actions 自動部署腳本
-├── posts/                      # 文章收納目錄
-│   └── hello-world.gmi         # 文章範本
-├── index.gmi                   # 站點首頁
+│       └── deploy.yml          # 自動建置並部署至 Fly.io
+├── posts/                      # 膠囊文章目錄
+│   └── hello-world.gmi         # 範例文章
+├── Dockerfile                  # 超輕量 Agate 執行映像檔（< 20MB）
+├── fly.toml                    # Fly.io 連接埠與休眠規則配置
+├── index.gmi                   # 膠囊首頁
 └── README.md
 
 ```
 
 ---
 
-## 寫作規範（Gemtext 語法速查）
+## 快速開始
 
-Gemtext 檔案副檔名統一使用 `.gmi`，常見語法規範如下：
+### 1. 準備必要檔案
+
+`Dockerfile` 與 `fly.toml` 已包含在本儲存庫中，內容如下供參考。
+
+#### `Dockerfile`
+
+```dockerfile
+FROM alpine:latest
+RUN apk add --no-cache wget ca-certificates \
+    && wget -O agate.tar.gz https://github.com/mbrubeck/agate/releases/latest/download/agate-x86_64-unknown-linux-musl.tar.gz \
+    && tar -xvf agate.tar.gz -C /usr/local/bin/ \
+    && rm agate.tar.gz
+
+WORKDIR /app
+COPY . /app/content
+
+# 宣告對外開放 Gemini 協定 Port 1965
+EXPOSE 1965
+
+CMD ["agate", "--content", "/app/content", "--certs", "/app/certs", "--hostname", "yourdomain.tw", "--lang", "zh-TW"]
+```
+
+> 注意：`CMD` 中的 `--hostname` 請改為你的實際網域（Agate 以此自動取得 TLS 憑證）。
+
+#### `fly.toml`
+
+```toml
+app = "my-gemlog"
+primary_region = "nrt" # 建議選擇鄰近區域（如東京 nrt 或新加坡 sin）
+
+[build]
+  dockerfile = "Dockerfile"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 1965
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 1965
+```
+
+---
+
+### 2. 初始化 Fly.io 服務
+
+1. 安裝命令列工具並登入：
+```bash
+# macOS / Linux 安裝
+curl -L https://fly.io/install.sh | sh
+fly auth login
+```
+
+2. 註冊 App（僅建立定義，不立即在本機發布；請將 `my-gemlog` 換成你的唯一 App 名稱）：
+```bash
+fly launch --no-deploy
+```
+
+3. 取得專屬 IPv4 與 IPv6 位址：
+```bash
+fly ips allocate-v4
+fly ips allocate-v6
+```
+
+4. 取得 GitHub Actions 部署專用 Token：
+```bash
+fly tokens create deploy
+```
+
+---
+
+### 3. 設定 GitHub Secrets 與 CI/CD
+
+前往 GitHub 儲存庫的 **Settings → Secrets and variables → Actions**，新增以下 Secret：
+
+| Secret 名稱 | 內容說明 |
+| --- | --- |
+| `FLY_API_TOKEN` | 剛才由 `fly tokens create deploy` 生成的 Token 憑證 |
+
+`.github/workflows/deploy.yml` 已包含在本儲存庫中：
+
+```yaml
+name: Deploy to Fly.io
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Deploy Capsule
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy App
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+```
+
+> 本專案額外啟用了 `workflow_dispatch`，可在 **Actions → Deploy to Fly.io → Run workflow** 手動觸發重新發布。
+
+---
+
+### 4. 設定 DNS 記錄
+
+至網域託管商（如 Cloudflare、Namecheap）加入解析：
+
+| 類型 | 名稱 (Name) | 內容 (Content) | 代理狀態 |
+| --- | --- | --- | --- |
+| **A** | `@` (或子網域) | `fly ips allocate-v4` 取得的 IP | **僅限 DNS（關閉 CDN 代理）** |
+| **AAAA** | `@` (或子網域) | `fly ips allocate-v6` 取得的 IP | **僅限 DNS（關閉 CDN 代理）** |
+
+> **提示**：Cloudflare 免費 CDN 無法轉發 Port 1965 流量，因此必須保持灰色雲朵（DNS Only）。
+
+---
+
+## Gemtext 語法規範速查
+
+Gemtext（`.gmi`）採用純文字超輕量排版，支援以下 6 種核心標記：
 
 ```gemtext
-# 一級標題
-## 二級標題
+# 一級標題（站點名稱）
+## 二級標題（文章章節）
 ### 三級標題
 
-一般內文段落直接換行書寫即可。讀者客戶端會自動調整行距與斷行。
+一般內文段落直接書寫，斷行由讀者客戶端排版引擎自動計算。
 
-* 清單項目 A
-* 清單項目 B
+* 無序清單項目 1
+* 無序清單項目 2
 
-> 這是引言區塊
+> 引言或註解區塊
 
-=> /posts/hello-world.gmi 2026-10-02 連結文字（內部文章）
-=> [https://example.com](https://example.com) 外部 Web 連結
-
-
+=> /posts/hello-world.gmi 2026-10-02 第一篇文章連結（站內）
+=> https://example.com 外部網頁超連結
 ```
 
-預先格式化文字區塊（程式碼或 ASCII Art）
-
-```
-
-```
+預先格式化的程式碼區塊、ASCII 表格或文本，以三個反引號 ``` 包圍。
 
 ---
 
-## 伺服器端環境設定（以 Agate 為例）
+## 日常寫作流程
 
-伺服器端建議使用 Rust 開發的輕量伺服器 [Agate](https://github.com/mbrubeck/agate)。
+1. 在本機撰寫新文章存至 `posts/my-post.gmi`。
+2. 在 `index.gmi` 加入文章連結索引：
+```gemtext
+=> /posts/my-post.gmi 2026-10-02 我的最新文章
+```
 
-### 1. 安裝與目錄建立
-
+3. 提交並推送至 GitHub：
 ```bash
-# 建立內容與憑證目錄
-sudo mkdir -p /var/gemini/content
-sudo mkdir -p /var/gemini/certs
-
-# 下載 Agate 二進位檔
-wget [https://github.com/mbrubeck/agate/releases/latest/download/agate-x86_64-unknown-linux-gnu.tar.gz](https://github.com/mbrubeck/agate/releases/latest/download/agate-x86_64-unknown-linux-gnu.tar.gz)
-tar -xvf agate-x86_64-unknown-linux-gnu.tar.gz
-sudo mv agate /usr/local/bin/
-
+git add .
+git commit -m "feat: publish my-post"
+git push origin main
 ```
 
-### 2. 設定 systemd 服務常駐
-
-建立 `/etc/systemd/system/agate.service`：
-
-```ini
-[Unit]
-Description=Agate Gemini Server
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/local/bin/agate --content /var/gemini/content --certs /var/gemini/certs --hostname yourdomain.tw --lang zh-TW
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-
-```
-
-啟動服務並設定開機自啟：
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now agate
-
-```
+4. GitHub Actions 自動建置 Docker 映像檔並更新至 Fly.io，約 1 分鐘內即可透過 Gemini 瀏覽器閱讀更新。
 
 ---
 
-## CI/CD 部署設定
+## 災難復原（Serverless 版）
 
-專案透過 `.github/workflows/deploy.yml` 進行部署：
+由於整個站點就是這個 Git 儲存庫，且執行環境為 Fly.io 上的拋棄式容器：
 
-* **自動觸發**：推送到 `main` 分支時，以 rsync（`easingthemes/ssh-deploy@v5`）將全站內容同步至主機 `/var/gemini/content`（含 `--delete`，保持與儲存庫一致）。
-* **手動觸發**：Workflow 同時啟用了 `workflow_dispatch`，可在 **Actions → Deploy Gemlog → Run workflow** 手動執行全量同步（災難復原換新主機後使用）。
-
-### 1. 建立專用 SSH Key（於主機執行）
-
-```bash
-ssh-keygen -t ed25519 -C "deploy@github-action" -f ~/.ssh/gemlog_deploy
-cat ~/.ssh/gemlog_deploy.pub >> ~/.ssh/authorized_keys
-
-```
-
-### 2. GitHub Secrets 設定
-
-前往本儲存庫的 **Settings → Secrets and variables → Actions**，新增以下 Secret：
-
-| 變數名稱 | 說明 |
-| --- | --- |
-| `SERVER_IP` | 伺服器對外公開 IP 位址 |
-| `SERVER_USER` | 登入主機的使用者名稱（如 `root` 或 `ubuntu`） |
-| `SSH_PRIVATE_KEY` | 剛剛生成的私鑰內容（`~/.ssh/gemlog_deploy` 全文） |
-
-設定完成後，每次推送到 `main` 分支將自動同步檔案至 `/var/gemini/content`。
-
----
-
-## DNS 設定注意事項
-
-在網域註冊商或 Cloudflare 新增 A 記錄：
-
-* **名稱 (Name)**：`@` 或 `gemini`
-* **內容 (Content)**：主機 IP 位址
-* **Proxy 狀態**：**務必關閉代理（DNS Only）**。Cloudflare 免費 CDN 不支援 Gemini 專屬的 `1965` 連接埠。
-
----
-
-## 災難復原演練（主機損毀或更換）
-
-若現有 VPS 服務終止或硬體故障，請依序執行以下步驟：
-
-1. 開啟一台新 VPS 並安裝 Agate（參考上方「伺服器端環境設定」）。
-2. 更新網域 DNS A 記錄指向新主機 IP。
-3. 前往 GitHub Repo 修改 `SERVER_IP` 與 `SSH_PRIVATE_KEY`。
-4. 手動點擊 GitHub Actions 的 **Run workflow**，站點即刻滿血復原。
-
-```
-
+1. 若 App 異常，直接在 GitHub Actions 手動 **Run workflow** 重新部署。
+2. 若需更換平台／區域，修改 `fly.toml`（如 `primary_region`）後推送，或改 DNS A/AAAA 記錄指向新 IP。
+3. 歷史文章存在 Git 版本控制中，一篇也不會丟失。

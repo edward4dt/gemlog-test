@@ -1,13 +1,13 @@
 # 我的極簡 Gemlog
 
-歡迎來到我的個人膠囊空間。本站台內容以 GitHub 作為單一事實來源（Single Source of Truth），透過 GitHub Actions 自動部署至 Gemini 伺服器。
+歡迎來到我的個人膠囊空間。本儲存庫為單一事實來源（SSOT），透過 GitHub Actions 推送即發布至 Fly.io 無伺服器容器（Scale-to-Zero）。
 
 ## 最新文章
 => /posts/hello-world.gmi 2026-10-02 第一篇測試文章
 
 ## 關於
-* 協定：Gemini Protocol (gemini://)
-* 伺服器：Agate (Rust)
+* 協定：Gemini Protocol (gemini://，Port 1965)
+* 架構：Fly.io Scale-to-Zero + Agate（Rust）
 * 內容格式：Gemtext (.gmi)
 
 => https://github.com/edward4dt/gemlog-test 本儲存庫（GitHub）
