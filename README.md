@@ -1,4 +1,3 @@
-```markdown
 # My Gemlog
 
 > 基於 Gemini 協定打造的個人極簡膠囊（Capsule）。內容與主機完全解耦，以 GitHub 作為單一事實來源（Single Source of Truth），具備秒級災難復原能力的純文字個人站點。
@@ -156,4 +155,3 @@ cat ~/.ssh/gemlog_deploy.pub >> ~/.ssh/authorized_keys
 
 ```
 
-```
